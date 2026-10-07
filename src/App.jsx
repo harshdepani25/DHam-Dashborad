@@ -463,98 +463,321 @@ export default function App() {
           </div>
         )}
 
-        {/* Map & Navigation Views Layout Bar */}
-        <div className="section-toolbar">
-          <div className="section-toolbar-left">
-            <span className="section-toolbar-title">Tactical Vision & Spatial Navigation</span>
-            <span className="section-toolbar-subtitle">Dual-Engine 2D Tactical Grid & 3D WebGL Digital Twin</span>
+        {/* Dedicated Map View when Map tab is active */}
+        {activeView === 'map' && (
+          <div className="dedicated-map-view">
+            <div className="section-toolbar">
+              <div className="section-toolbar-left">
+                <span className="section-toolbar-title">Spatial Mapping & Autonomous Localization</span>
+                <span className="section-toolbar-subtitle">Synchronized Real-Time 2D Tactical Grid & 3D WebGL Digital Twin</span>
+              </div>
+              <div className="layout-toggle-pills">
+                <button
+                  className={`layout-pill-btn ${mapLayout === 'dual_map' || mapLayout === 'triple' ? 'active' : ''}`}
+                  onClick={() => { setMapLayout('dual_map'); showToast("Switched to Dual Maps View"); }}
+                  title="Show 2D Map and 3D Map side-by-side"
+                >
+                  <span>🧭 Dual Spatial Split (2D & 3D)</span>
+                </button>
+                <button
+                  className={`layout-pill-btn ${mapLayout === 'map3d_only' ? 'active' : ''}`}
+                  onClick={() => { setMapLayout('map3d_only'); showToast("Expanded 3D WebGL Digital Twin"); }}
+                  title="Show Full 3D Map Section"
+                >
+                  <span>🧊 3D WebGL Digital Twin</span>
+                </button>
+                <button
+                  className={`layout-pill-btn ${mapLayout === 'map2d_only' ? 'active' : ''}`}
+                  onClick={() => { setMapLayout('map2d_only'); showToast("Expanded 2D Tactical Map"); }}
+                  title="Show Full 2D Map Section"
+                >
+                  <span>🗺️ 2D Tactical Grid</span>
+                </button>
+                <button
+                  className="layout-pill-btn"
+                  onClick={() => { setActiveView('dashboard'); showToast("Returned to Master Dashboard"); }}
+                  title="Return to Master Dashboard"
+                >
+                  <span>⚡ Master Dashboard</span>
+                </button>
+              </div>
+            </div>
+
+            <div className={`dedicated-map-grid ${mapLayout === 'map3d_only' || mapLayout === 'map2d_only' ? 'layout-single' : 'layout-dual'}`}>
+              {mapLayout !== 'map3d_only' && (
+                <Map2D
+                  mapData={telemetry.map}
+                  position={telemetry.position}
+                  theme={theme}
+                  onShowToast={showToast}
+                />
+              )}
+              {mapLayout !== 'map2d_only' && (
+                <Map3D
+                  mapData={telemetry.map}
+                  position={telemetry.position}
+                  theme={theme}
+                  onShowToast={showToast}
+                />
+              )}
+            </div>
+
+            <div className="map-nav-strip">
+              <div className="map-nav-metrics">
+                <div className="map-nav-metric-item">
+                  <span className="map-nav-metric-label">X Position</span>
+                  <span className="map-nav-metric-val">{Number(telemetry.position?.x ?? 52.4).toFixed(1)} m</span>
+                </div>
+                <div className="map-nav-metric-item">
+                  <span className="map-nav-metric-label">Y Position</span>
+                  <span className="map-nav-metric-val">{Number(telemetry.position?.y ?? 38.6).toFixed(1)} m</span>
+                </div>
+                <div className="map-nav-metric-item">
+                  <span className="map-nav-metric-label">Subsurface Depth</span>
+                  <span className="map-nav-metric-val">{telemetry.sensors?.depth?.value ?? -480} m</span>
+                </div>
+                <div className="map-nav-metric-item">
+                  <span className="map-nav-metric-label">Heading</span>
+                  <span className="map-nav-metric-val">{Math.round(telemetry.position?.heading ?? 84)}°</span>
+                </div>
+                <div className="map-nav-metric-item">
+                  <span className="map-nav-metric-label">Zone / Sector</span>
+                  <span className="map-nav-metric-val">{telemetry.position?.zone ?? "Sector 4 - Deep Shaft B"}</span>
+                </div>
+                <div className="map-nav-metric-item">
+                  <span className="map-nav-metric-label">Velocity</span>
+                  <span className="map-nav-metric-val">{Number(telemetry.position?.speed ?? 1.2).toFixed(1)} m/s</span>
+                </div>
+                <div className="map-nav-metric-item">
+                  <span className="map-nav-metric-label">Hazards</span>
+                  <span className="map-nav-metric-val">{telemetry.map?.obstacles?.length ?? 3} active</span>
+                </div>
+              </div>
+              <div className="map-nav-actions">
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleSelectPreset('obstacle')}
+                >
+                  Simulate Obstacle Hazard
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="layout-toggle-pills">
-            <button
-              className={`layout-pill-btn ${mapLayout === 'triple' ? 'active' : ''}`}
-              onClick={() => { setMapLayout('triple'); showToast("Switched to Triple View: 2D + 3D + Camera"); }}
-              title="Show 2D Map, 3D Digital Twin, and Live Camera side-by-side"
-            >
-              <span>⚡ Triple View (2D + 3D + Cam)</span>
-            </button>
-            <button
-              className={`layout-pill-btn ${mapLayout === 'dual_map' ? 'active' : ''}`}
-              onClick={() => { setMapLayout('dual_map'); showToast("Switched to Dual Maps View: 2D & 3D side-by-side"); }}
-              title="Show 2D Map and 3D Map side-by-side"
-            >
-              <span>🧭 Dual Maps (2D & 3D)</span>
-            </button>
-            <button
-              className={`layout-pill-btn ${mapLayout === 'map3d_cam' ? 'active' : ''}`}
-              onClick={() => { setMapLayout('map3d_cam'); showToast("Switched to 3D Map + Camera View"); }}
-              title="Show 3D Map and Live Camera"
-            >
-              <span>🧊 3D Map + Camera</span>
-            </button>
-            <button
-              className={`layout-pill-btn ${mapLayout === 'map2d_cam' ? 'active' : ''}`}
-              onClick={() => { setMapLayout('map2d_cam'); showToast("Switched to 2D Map + Camera View"); }}
-              title="Show 2D Map and Live Camera"
-            >
-              <span>🗺️ 2D Map + Camera</span>
-            </button>
-          </div>
-        </div>
+        )}
 
-        {/* Main Grid */}
-        <div className="dashboard-grid">
-          {/* Row 1: Dual/Triple Spatial & Vision Grid */}
-          <div className={`top-row-grid layout-${mapLayout}`}>
-            {(mapLayout === 'triple' || mapLayout === 'dual_map' || mapLayout === 'map2d_cam') && (
-              <Map2D
-                mapData={telemetry.map}
-                position={telemetry.position}
-                theme={theme}
-                onShowToast={showToast}
-              />
-            )}
-
-            {(mapLayout === 'triple' || mapLayout === 'dual_map' || mapLayout === 'map3d_cam') && (
-              <Map3D
-                mapData={telemetry.map}
-                position={telemetry.position}
-                theme={theme}
-                onShowToast={showToast}
-              />
-            )}
-
-            {(mapLayout === 'triple' || mapLayout === 'map3d_cam' || mapLayout === 'map2d_cam') && (
-              <LiveCamera
-                cameraData={telemetry.camera}
-                depth={telemetry.sensors?.depth?.value}
-                speed={telemetry.position?.speed}
-                onShowToast={showToast}
-              />
-            )}
-          </div>
-
-          {/* Row 2: Multigas & Environmental Sensors Suite */}
-          <SensorCards
-            sensors={telemetry.sensors}
-            history={history}
-            onShowToast={showToast}
-          />
-
-          {/* Row 3: System Status, Recent Alerts, Quick Controls */}
-          <div className="bottom-row-grid">
-            <SystemStatus
-              health={telemetry.systemHealth}
-              subsystems={telemetry.subsystems}
+        {/* Dedicated Camera View when Camera tab is active */}
+        {activeView === 'camera' && (
+          <div className="view-panel-container">
+            <div className="section-toolbar">
+              <div className="section-toolbar-left">
+                <span className="section-toolbar-title">Autonomous Vision & Optical Streams</span>
+                <span className="section-toolbar-subtitle">High-Definition Subsurface Inspection Feeds</span>
+              </div>
+              <div className="layout-toggle-pills">
+                <button
+                  className="layout-pill-btn active"
+                  onClick={() => { setActiveView('dashboard'); showToast("Returned to Dashboard"); }}
+                >
+                  <span>⚡ Return to Dashboard</span>
+                </button>
+              </div>
+            </div>
+            <LiveCamera
+              cameraData={telemetry.camera}
+              depth={telemetry.sensors?.depth?.value}
+              speed={telemetry.position?.speed}
+              onShowToast={showToast}
             />
+          </div>
+        )}
+
+        {/* Dedicated Analytics View when Analytics tab is active */}
+        {activeView === 'analytics' && (
+          <div className="view-panel-container">
+            <div className="section-toolbar">
+              <div className="section-toolbar-left">
+                <span className="section-toolbar-title">Atmospheric & Environmental Analytics</span>
+                <span className="section-toolbar-subtitle">Multi-gas sensor arrays & trend diagnostics</span>
+              </div>
+              <div className="layout-toggle-pills">
+                <button
+                  className="layout-pill-btn active"
+                  onClick={() => { setActiveView('dashboard'); showToast("Returned to Dashboard"); }}
+                >
+                  <span>⚡ Return to Dashboard</span>
+                </button>
+              </div>
+            </div>
+            <SensorCards
+              sensors={telemetry.sensors}
+              history={history}
+              onShowToast={showToast}
+            />
+          </div>
+        )}
+
+        {/* Dedicated Alerts View when Alerts tab is active */}
+        {activeView === 'alerts' && (
+          <div className="view-panel-container">
+            <div className="section-toolbar">
+              <div className="section-toolbar-left">
+                <span className="section-toolbar-title">Hazard Log & Safety Notifications</span>
+                <span className="section-toolbar-subtitle">Critical environmental thresholds & emergency stops</span>
+              </div>
+              <div className="layout-toggle-pills">
+                <button
+                  className="layout-pill-btn active"
+                  onClick={() => { setActiveView('dashboard'); showToast("Returned to Dashboard"); }}
+                >
+                  <span>⚡ Return to Dashboard</span>
+                </button>
+              </div>
+            </div>
             <RecentAlerts
               alerts={telemetry.alerts}
               onClearAlerts={handleClearAlerts}
+            />
+          </div>
+        )}
+
+        {/* Dedicated Settings View when Settings tab is active */}
+        {activeView === 'settings' && (
+          <div className="view-panel-container">
+            <div className="section-toolbar">
+              <div className="section-toolbar-left">
+                <span className="section-toolbar-title">System Configuration & Subsystem Health</span>
+                <span className="section-toolbar-subtitle">Diagnostic controls & hardware statuses</span>
+              </div>
+              <div className="layout-toggle-pills">
+                <button
+                  className="layout-pill-btn active"
+                  onClick={() => { setActiveView('dashboard'); showToast("Returned to Dashboard"); }}
+                >
+                  <span>⚡ Return to Dashboard</span>
+                </button>
+              </div>
+            </div>
+            <SystemStatus
+              health={telemetry.systemHealth}
+              subsystems={telemetry.subsystems}
             />
             <QuickControls
               onControlAction={handleControlAction}
             />
           </div>
-        </div>
+        )}
+
+        {/* Main Dashboard View */}
+        {activeView === 'dashboard' && (
+          <>
+            {/* Map & Navigation Views Layout Bar */}
+            <div className="section-toolbar">
+              <div className="section-toolbar-left">
+                <span className="section-toolbar-title">Tactical Vision & Spatial Navigation</span>
+                <span className="section-toolbar-subtitle">Dual-Engine 2D Tactical Grid & 3D WebGL Digital Twin</span>
+              </div>
+              <div className="layout-toggle-pills">
+                <button
+                  className={`layout-pill-btn ${mapLayout === 'triple' ? 'active' : ''}`}
+                  onClick={() => { setMapLayout('triple'); showToast("Switched to Triple View: 2D + 3D + Cam"); }}
+                  title="Show 2D Map, 3D Digital Twin, and Live Camera side-by-side"
+                >
+                  <span>⚡ Triple View (2D + 3D + Cam)</span>
+                </button>
+                <button
+                  className={`layout-pill-btn ${mapLayout === 'dual_map' ? 'active' : ''}`}
+                  onClick={() => { setMapLayout('dual_map'); showToast("Switched to Dual Maps View: 2D & 3D side-by-side"); }}
+                  title="Show 2D Map and 3D Map side-by-side"
+                >
+                  <span>🧭 Dual Maps (2D & 3D)</span>
+                </button>
+                <button
+                  className={`layout-pill-btn ${mapLayout === 'map3d_only' ? 'active' : ''}`}
+                  onClick={() => { setMapLayout('map3d_only'); showToast("Switched to 3D Digital Twin Map View"); }}
+                  title="Show Full 3D Map Section"
+                >
+                  <span>🧊 3D Map Only</span>
+                </button>
+                <button
+                  className={`layout-pill-btn ${mapLayout === 'map2d_only' ? 'active' : ''}`}
+                  onClick={() => { setMapLayout('map2d_only'); showToast("Switched to 2D Tactical Map View"); }}
+                  title="Show Full 2D Map Section"
+                >
+                  <span>🗺️ 2D Map Only</span>
+                </button>
+                <button
+                  className={`layout-pill-btn ${mapLayout === 'map3d_cam' ? 'active' : ''}`}
+                  onClick={() => { setMapLayout('map3d_cam'); showToast("Switched to 3D Map + Camera View"); }}
+                  title="Show 3D Map and Live Camera"
+                >
+                  <span>🧊 3D Map + Cam</span>
+                </button>
+                <button
+                  className={`layout-pill-btn ${mapLayout === 'map2d_cam' ? 'active' : ''}`}
+                  onClick={() => { setMapLayout('map2d_cam'); showToast("Switched to 2D Map + Camera View"); }}
+                  title="Show 2D Map and Live Camera"
+                >
+                  <span>🗺️ 2D Map + Cam</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Main Grid */}
+            <div className="dashboard-grid">
+              {/* Row 1: Dual/Triple Spatial & Vision Grid */}
+              <div className={`top-row-grid layout-${mapLayout}`}>
+                {(mapLayout === 'triple' || mapLayout === 'dual_map' || mapLayout === 'map2d_cam' || mapLayout === 'map2d_only') && (
+                  <Map2D
+                    mapData={telemetry.map}
+                    position={telemetry.position}
+                    theme={theme}
+                    onShowToast={showToast}
+                  />
+                )}
+
+                {(mapLayout === 'triple' || mapLayout === 'dual_map' || mapLayout === 'map3d_cam' || mapLayout === 'map3d_only') && (
+                  <Map3D
+                    mapData={telemetry.map}
+                    position={telemetry.position}
+                    theme={theme}
+                    onShowToast={showToast}
+                  />
+                )}
+
+                {(mapLayout === 'triple' || mapLayout === 'map3d_cam' || mapLayout === 'map2d_cam') && (
+                  <LiveCamera
+                    cameraData={telemetry.camera}
+                    depth={telemetry.sensors?.depth?.value}
+                    speed={telemetry.position?.speed}
+                    onShowToast={showToast}
+                  />
+                )}
+              </div>
+
+              {/* Row 2: Multigas & Environmental Sensors Suite */}
+              <SensorCards
+                sensors={telemetry.sensors}
+                history={history}
+                onShowToast={showToast}
+              />
+
+              {/* Row 3: System Status, Recent Alerts, Quick Controls */}
+              <div className="bottom-row-grid">
+                <SystemStatus
+                  health={telemetry.systemHealth}
+                  subsystems={telemetry.subsystems}
+                />
+                <RecentAlerts
+                  alerts={telemetry.alerts}
+                  onClearAlerts={handleClearAlerts}
+                />
+                <QuickControls
+                  onControlAction={handleControlAction}
+                />
+              </div>
+            </div>
+          </>
+        )}
       </main>
 
       {/* JSON Inspector & Editor Drawer */}
