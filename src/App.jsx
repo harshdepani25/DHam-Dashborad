@@ -41,6 +41,16 @@ export default function App() {
 
   const [activeView, setActiveView] = useState('dashboard');
   const [mapLayout, setMapLayout] = useState('triple'); // 'triple' | 'dual_map' | 'map3d_cam' | 'map2d_cam'
+  const [is3DMapVisible, setIs3DMapVisible] = useState(() => {
+    try {
+      const saved = localStorage.getItem('mining_dashboard_show_3d_map');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+  const [robotMode, setRobotMode] = useState('automatic'); // 'automatic' | 'manual' | 'emergency_outside'
+  const [manualSpeed, setManualSpeed] = useState(1.2); // 0.5 | 1.2 | 2.2
   const [liveSim, setLiveSim] = useState(true);
   const [isJsonDrawerOpen, setIsJsonDrawerOpen] = useState(false);
   const [isRobotModalOpen, setIsRobotModalOpen] = useState(false);
@@ -195,21 +205,62 @@ export default function App() {
         const curO2 = Math.min(23.5, Math.max(15.0, Number((getV('o2', 20.9) + o2Drift).toFixed(1))));
         const curPm25 = Math.max(5, Math.round(getV('pm25', 34) + pm25Drift));
 
-        // Movement step
-        let { x, y, heading } = prev.position;
-        const step = 0.2;
-        x += Math.cos((heading * Math.PI) / 180) * step;
-        y += Math.sin((heading * Math.PI) / 180) * step * 0.4;
+        // Movement & Navigation Step based on Robot Operating Mode
+        let { x, y, heading } = prev.position || { x: 52.4, y: 38.6, heading: 84 };
+        let nextSpeed = prev.position?.speed ?? 1.2;
+        let nextZone = prev.position?.zone ?? "Sector 4 - Deep Shaft B";
 
-        if (x > 80) heading = 220;
-        if (x < 20) heading = 40;
+        if (robotMode === 'emergency_outside') {
+          // Navigating towards Outside Surface Portal (12, 16)
+          const targetX = 12;
+          const targetY = 16;
+          const dx = targetX - x;
+          const dy = targetY - y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist > 1.2) {
+            const radAngle = Math.atan2(dy, dx);
+            heading = Math.round((radAngle * 180) / Math.PI);
+            if (heading < 0) heading += 360;
+            const evacStep = 0.65; // High speed retreat
+            x += Math.cos(radAngle) * evacStep;
+            y += Math.sin(radAngle) * evacStep;
+            nextSpeed = 2.4;
+            nextZone = `Egress to Surface (${Math.round(dist * 6)}m remaining)`;
+          } else {
+            x = targetX;
+            y = targetY;
+            nextSpeed = 0.0;
+            nextZone = "Surface Portal (Safely Outside)";
+          }
+        } else if (robotMode === 'automatic') {
+          // Autonomous mining shaft traversal
+          const step = 0.2;
+          x += Math.cos((heading * Math.PI) / 180) * step;
+          y += Math.sin((heading * Math.PI) / 180) * step * 0.4;
+
+          if (x > 80) heading = 220;
+          if (x < 20) heading = 40;
+          nextSpeed = 1.2;
+        }
+        // In manual mode: robot holds position unless operator teleoperates
 
         const nextPos = {
           ...prev.position,
           x: Number(x.toFixed(1)),
           y: Number(y.toFixed(1)),
-          heading
+          heading,
+          speed: nextSpeed,
+          zone: nextZone
         };
+
+        // Depth Calculation (in emergency mode, ascends toward surface ground 0m)
+        let curDepth = (s.depth && s.depth.value !== undefined) ? s.depth.value : -480;
+        if (robotMode === 'emergency_outside') {
+          if (curDepth < 0) {
+            curDepth = Math.min(0, curDepth + 32);
+          }
+        }
 
         // Update history
         setHistory((h) => ({
@@ -239,6 +290,7 @@ export default function App() {
             dht22_humidity: { ...(s.dht22_humidity || {}), value: curHum },
             o2: { ...(s.o2 || {}), value: curO2 },
             pm25: { ...(s.pm25 || {}), value: curPm25 },
+            depth: { ...(s.depth || {}), value: curDepth, unit: "m" },
             // Aliases synced
             ch4: { ...(s.ch4 || {}), value: curMq4 },
             co: { ...(s.co || {}), value: curMq7 },
@@ -255,7 +307,7 @@ export default function App() {
     }, 1500);
 
     return () => clearInterval(timer);
-  }, [liveSim]);
+  }, [liveSim, robotMode]);
 
   // Handle Preset Selection
   const handleSelectPreset = async (presetKey) => {
@@ -378,6 +430,7 @@ export default function App() {
   // Quick Controls
   const handleControlAction = (action) => {
     if (action === 'start') {
+      setRobotMode('automatic');
       setLiveSim(true);
       updateTelemetry({
         subsystems: { motors: "Active", navigation: "Active" },
@@ -416,6 +469,136 @@ export default function App() {
     }
   };
 
+  // 3D Map Visibility persistence handlers
+  const handleRemove3DMap = useCallback(() => {
+    setIs3DMapVisible(false);
+    try {
+      localStorage.setItem('mining_dashboard_show_3d_map', 'false');
+    } catch (e) {}
+    showToast("🧊 3D Map removed. You can re-display it anytime from the top bar.");
+  }, [showToast]);
+
+  const handleRestore3DMap = useCallback(() => {
+    setIs3DMapVisible(true);
+    try {
+      localStorage.setItem('mining_dashboard_show_3d_map', 'true');
+    } catch (e) {}
+    showToast("🧊 3D Map restored to dashboard");
+  }, [showToast]);
+
+  // Emergency Return to Outside handler
+  const handleEmergencyOutside = useCallback(() => {
+    setRobotMode('emergency_outside');
+    setLiveSim(true);
+    const newAlert = {
+      id: `EVAC-${Date.now()}`,
+      time: new Date().toTimeString().split(' ')[0],
+      level: "critical",
+      message: "🚨 EMERGENCY: Commanded robot to abort mission and return outside to surface portal!",
+      action: "Surface egress route active"
+    };
+    updateTelemetry({
+      subsystems: { motors: "Emergency Egress", navigation: "Surface Return" },
+      position: { speed: 2.4, zone: "Evacuating to Surface Portal" },
+      alerts: [newAlert, ...(telemetry.alerts || [])]
+    }, "Emergency Command");
+    showToast("🚨 EMERGENCY COMMAND SENT: Robot returning to outside surface portal at 2.4 m/s maximum speed!");
+  }, [updateTelemetry, telemetry.alerts, showToast]);
+
+  const handleCancelEmergency = useCallback(() => {
+    setRobotMode('automatic');
+    updateTelemetry({
+      subsystems: { motors: "Active", navigation: "Active" },
+      position: { speed: 1.2, zone: "Sector 4 - Deep Shaft B" }
+    }, "Resume Auto");
+    showToast("Evacuation cancelled. Resumed Automatic Patrol.");
+  }, [updateTelemetry, showToast]);
+
+  // Manual teleoperation drive handler
+  const handleManualDrive = useCallback((direction) => {
+    if (robotMode !== 'manual') {
+      setRobotMode('manual');
+    }
+    setTelemetry((prev) => {
+      let { x, y, heading } = prev.position || { x: 52.4, y: 38.6, heading: 84 };
+      const rad = ((heading || 0) * Math.PI) / 180;
+      const step = manualSpeed * 0.45;
+
+      if (direction === 'forward') {
+        x += Math.cos(rad) * step;
+        y += Math.sin(rad) * step;
+      } else if (direction === 'backward') {
+        x -= Math.cos(rad) * step;
+        y -= Math.sin(rad) * step;
+      } else if (direction === 'left') {
+        heading = (heading - 15 + 360) % 360;
+      } else if (direction === 'right') {
+        heading = (heading + 15) % 360;
+      } else if (direction === 'stop') {
+        return {
+          ...prev,
+          position: { ...prev.position, speed: 0.0 },
+          subsystems: { ...prev.subsystems, motors: "Halted (Manual)" }
+        };
+      }
+
+      // Bound within tunnel coordinates
+      x = Math.max(5, Math.min(95, x));
+      y = Math.max(5, Math.min(85, y));
+
+      const newPos = {
+        ...prev.position,
+        x: Number(x.toFixed(1)),
+        y: Number(y.toFixed(1)),
+        heading,
+        speed: direction === 'stop' ? 0.0 : manualSpeed
+      };
+
+      return {
+        ...prev,
+        position: newPos,
+        map: {
+          ...prev.map,
+          robot: { x: newPos.x, y: newPos.y }
+        },
+        subsystems: {
+          ...prev.subsystems,
+          motors: "Manual Teleop",
+          navigation: "Manual Steer"
+        }
+      };
+    });
+  }, [robotMode, manualSpeed]);
+
+  // Keyboard shortcut listener for manual teleoperation
+  useEffect(() => {
+    if (robotMode !== 'manual') return;
+
+    const handleKeyDown = (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+
+      if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        handleManualDrive('forward');
+      } else if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        handleManualDrive('backward');
+      } else if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handleManualDrive('left');
+      } else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleManualDrive('right');
+      } else if (e.key === ' ' || e.key === 'Escape') {
+        e.preventDefault();
+        handleManualDrive('stop');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [robotMode, handleManualDrive]);
+
   const handleClearAlerts = () => {
     updateTelemetry({
       alerts: [],
@@ -425,15 +608,28 @@ export default function App() {
     showToast("All alerts cleared. System nominal.");
   };
 
+  const handleNavViewChange = useCallback((viewId) => {
+    setActiveView(viewId);
+    const viewNames = {
+      dashboard: "Master Mission Dashboard",
+      map: "Spatial Mapping & 3D Digital Twin",
+      camera: "Live Subsurface Optical Camera",
+      analytics: "Atmospheric & Multi-Gas Analytics",
+      alerts: "Safety Logs & Hazard Notifications",
+      settings: "System Configuration & Diagnostics"
+    };
+    showToast(`🧭 View: ${viewNames[viewId] || viewId}`);
+  }, [showToast]);
+
   return (
     <div className="app-layout">
       {/* File Drop Overlay */}
       <DropOverlay isVisible={isDraggingFile} />
 
-      {/* Sidebar */}
+      {/* Sidebar Navigation */}
       <Sidebar
         activeView={activeView}
-        setActiveView={setActiveView}
+        setActiveView={handleNavViewChange}
         alertCount={telemetry.alerts?.length || 0}
         onOpenRobotModal={() => setIsRobotModalOpen(true)}
         robotInfo={{ name: telemetry.name, version: telemetry.version }}
@@ -463,6 +659,45 @@ export default function App() {
           </div>
         )}
 
+        {/* Emergency Evacuation to Outside Banner */}
+        {robotMode === 'emergency_outside' && (
+          <div className="emergency-surface-banner" role="alert">
+            <div className="emergency-banner-left">
+              <div className="emergency-siren-box">🚨</div>
+              <div className="emergency-banner-info">
+                <div className="emergency-banner-title">
+                  EMERGENCY SURFACE EVACUATION COMMAND ENGAGED
+                </div>
+                <div className="emergency-banner-desc">
+                  Robot commanded to abort mission immediately and navigate out of underground shaft to outside surface portal. Egress path active.
+                </div>
+              </div>
+            </div>
+            <div className="emergency-banner-metrics">
+              <div className="emerg-metric-chip">
+                <span className="emerg-lbl">Target:</span>
+                <span className="emerg-val">Surface Portal (Outside)</span>
+              </div>
+              <div className="emerg-metric-chip">
+                <span className="emerg-lbl">Egress Speed:</span>
+                <span className="emerg-val">2.4 m/s (MAX)</span>
+              </div>
+              <div className="emerg-metric-chip">
+                <span className="emerg-lbl">Subsurface Depth:</span>
+                <span className="emerg-val">{telemetry.sensors?.depth?.value ?? -480} m</span>
+              </div>
+            </div>
+            <div className="emergency-banner-actions">
+              <button className="emerg-banner-btn btn-cancel" onClick={handleCancelEmergency}>
+                ✕ Cancel & Hold
+              </button>
+              <button className="emerg-banner-btn btn-manual" onClick={() => setRobotMode('manual')}>
+                🎮 Switch to Manual
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Dedicated Map View when Map tab is active */}
         {activeView === 'map' && (
           <div className="dedicated-map-view">
@@ -472,6 +707,24 @@ export default function App() {
                 <span className="section-toolbar-subtitle">Synchronized Real-Time 2D Tactical Grid & 3D WebGL Digital Twin</span>
               </div>
               <div className="layout-toggle-pills">
+                {!is3DMapVisible && (
+                  <button
+                    className="layout-pill-btn restore-3d-btn"
+                    onClick={handleRestore3DMap}
+                    title="Re-display 3D Map Section"
+                  >
+                    <span>+ 🧊 Re-display 3D Map</span>
+                  </button>
+                )}
+                {is3DMapVisible && (
+                  <button
+                    className="layout-pill-btn hide-3d-btn"
+                    onClick={handleRemove3DMap}
+                    title="Hide 3D Map Section"
+                  >
+                    <span>✕ Hide 3D Map</span>
+                  </button>
+                )}
                 <button
                   className={`layout-pill-btn ${mapLayout === 'dual_map' || mapLayout === 'triple' ? 'active' : ''}`}
                   onClick={() => { setMapLayout('dual_map'); showToast("Switched to Dual Maps View"); }}
@@ -503,21 +756,24 @@ export default function App() {
               </div>
             </div>
 
-            <div className={`dedicated-map-grid ${mapLayout === 'map3d_only' || mapLayout === 'map2d_only' ? 'layout-single' : 'layout-dual'}`}>
+            <div className={`dedicated-map-grid ${mapLayout === 'map3d_only' || mapLayout === 'map2d_only' || !is3DMapVisible ? 'layout-single' : 'layout-dual'}`}>
               {mapLayout !== 'map3d_only' && (
                 <Map2D
                   mapData={telemetry.map}
                   position={telemetry.position}
                   theme={theme}
+                  robotMode={robotMode}
                   onShowToast={showToast}
                 />
               )}
-              {mapLayout !== 'map2d_only' && (
+              {is3DMapVisible && mapLayout !== 'map2d_only' && (
                 <Map3D
                   mapData={telemetry.map}
                   position={telemetry.position}
                   theme={theme}
+                  robotMode={robotMode}
                   onShowToast={showToast}
+                  onRemove={handleRemove3DMap}
                 />
               )}
             </div>
@@ -662,7 +918,15 @@ export default function App() {
               subsystems={telemetry.subsystems}
             />
             <QuickControls
+              robotMode={robotMode}
+              onChangeMode={setRobotMode}
+              manualSpeed={manualSpeed}
+              onSetManualSpeed={setManualSpeed}
+              onManualDrive={handleManualDrive}
               onControlAction={handleControlAction}
+              onEmergencyOutside={handleEmergencyOutside}
+              onCancelEmergency={handleCancelEmergency}
+              telemetry={telemetry}
             />
           </div>
         )}
@@ -670,54 +934,85 @@ export default function App() {
         {/* Main Dashboard View */}
         {activeView === 'dashboard' && (
           <>
-            {/* Map & Navigation Views Layout Bar */}
+            {/* Robot Operating Mode Bar & Vision Layout Bar */}
             <div className="section-toolbar">
               <div className="section-toolbar-left">
-                <span className="section-toolbar-title">Tactical Vision & Spatial Navigation</span>
-                <span className="section-toolbar-subtitle">Dual-Engine 2D Tactical Grid & 3D WebGL Digital Twin</span>
+                <span className="section-toolbar-title">Mission Command & Spatial Navigation</span>
+                <div className="robot-mode-toolbar-pills" role="group" aria-label="Robot Operating Mode">
+                  <span className="mode-toolbar-label">Robot Mode:</span>
+                  <button
+                    className={`robot-mode-pill-btn ${robotMode === 'automatic' ? 'active auto' : ''}`}
+                    onClick={() => { setRobotMode('automatic'); showToast("🤖 Operating Mode: AUTOMATIC (Autonomous Patrol)"); }}
+                    title="Autonomous mission navigation & gas surveying"
+                  >
+                    <span className="mode-dot auto"></span>
+                    <span>🤖 Auto</span>
+                  </button>
+                  <button
+                    className={`robot-mode-pill-btn ${robotMode === 'manual' ? 'active manual' : ''}`}
+                    onClick={() => { setRobotMode('manual'); showToast("🎮 Operating Mode: MANUAL (Teleoperation D-Pad / WASD)"); }}
+                    title="Manual teleoperation driving using D-Pad or W/A/S/D keys"
+                  >
+                    <span className="mode-dot manual"></span>
+                    <span>🎮 Manual</span>
+                  </button>
+                  <button
+                    className={`robot-mode-pill-btn emergency ${robotMode === 'emergency_outside' ? 'active emergency-active' : ''}`}
+                    onClick={handleEmergencyOutside}
+                    title="EMERGENCY: Command robot to abort mission and return outside immediately"
+                  >
+                    <span className="mode-dot emergency"></span>
+                    <span>🚨 Return Outside</span>
+                  </button>
+                </div>
               </div>
+
               <div className="layout-toggle-pills">
+                {!is3DMapVisible && (
+                  <button
+                    className="layout-pill-btn restore-3d-btn"
+                    onClick={handleRestore3DMap}
+                    title="Re-display 3D Map Section on Dashboard"
+                  >
+                    <span>+ 🧊 Re-display 3D Map</span>
+                  </button>
+                )}
+                {is3DMapVisible && (
+                  <button
+                    className="layout-pill-btn hide-3d-btn"
+                    onClick={handleRemove3DMap}
+                    title="Hide 3D Map Section from Dashboard"
+                  >
+                    <span>✕ Hide 3D Map</span>
+                  </button>
+                )}
                 <button
                   className={`layout-pill-btn ${mapLayout === 'triple' ? 'active' : ''}`}
                   onClick={() => { setMapLayout('triple'); showToast("Switched to Triple View: 2D + 3D + Cam"); }}
                   title="Show 2D Map, 3D Digital Twin, and Live Camera side-by-side"
                 >
-                  <span>⚡ Triple View (2D + 3D + Cam)</span>
+                  <span>⚡ Triple View</span>
                 </button>
                 <button
                   className={`layout-pill-btn ${mapLayout === 'dual_map' ? 'active' : ''}`}
-                  onClick={() => { setMapLayout('dual_map'); showToast("Switched to Dual Maps View: 2D & 3D side-by-side"); }}
+                  onClick={() => { setMapLayout('dual_map'); showToast("Switched to Dual Maps View"); }}
                   title="Show 2D Map and 3D Map side-by-side"
                 >
-                  <span>🧭 Dual Maps (2D & 3D)</span>
+                  <span>🧭 Dual Maps</span>
                 </button>
                 <button
                   className={`layout-pill-btn ${mapLayout === 'map3d_only' ? 'active' : ''}`}
                   onClick={() => { setMapLayout('map3d_only'); showToast("Switched to 3D Digital Twin Map View"); }}
                   title="Show Full 3D Map Section"
                 >
-                  <span>🧊 3D Map Only</span>
+                  <span>🧊 3D Map</span>
                 </button>
                 <button
                   className={`layout-pill-btn ${mapLayout === 'map2d_only' ? 'active' : ''}`}
                   onClick={() => { setMapLayout('map2d_only'); showToast("Switched to 2D Tactical Map View"); }}
                   title="Show Full 2D Map Section"
                 >
-                  <span>🗺️ 2D Map Only</span>
-                </button>
-                <button
-                  className={`layout-pill-btn ${mapLayout === 'map3d_cam' ? 'active' : ''}`}
-                  onClick={() => { setMapLayout('map3d_cam'); showToast("Switched to 3D Map + Camera View"); }}
-                  title="Show 3D Map and Live Camera"
-                >
-                  <span>🧊 3D Map + Cam</span>
-                </button>
-                <button
-                  className={`layout-pill-btn ${mapLayout === 'map2d_cam' ? 'active' : ''}`}
-                  onClick={() => { setMapLayout('map2d_cam'); showToast("Switched to 2D Map + Camera View"); }}
-                  title="Show 2D Map and Live Camera"
-                >
-                  <span>🗺️ 2D Map + Cam</span>
+                  <span>🗺️ 2D Map</span>
                 </button>
               </div>
             </div>
@@ -725,22 +1020,25 @@ export default function App() {
             {/* Main Grid */}
             <div className="dashboard-grid">
               {/* Row 1: Dual/Triple Spatial & Vision Grid */}
-              <div className={`top-row-grid layout-${mapLayout}`}>
+              <div className={`top-row-grid layout-${mapLayout} ${!is3DMapVisible ? 'without-map3d' : ''}`}>
                 {(mapLayout === 'triple' || mapLayout === 'dual_map' || mapLayout === 'map2d_cam' || mapLayout === 'map2d_only') && (
                   <Map2D
                     mapData={telemetry.map}
                     position={telemetry.position}
                     theme={theme}
+                    robotMode={robotMode}
                     onShowToast={showToast}
                   />
                 )}
 
-                {(mapLayout === 'triple' || mapLayout === 'dual_map' || mapLayout === 'map3d_cam' || mapLayout === 'map3d_only') && (
+                {is3DMapVisible && (mapLayout === 'triple' || mapLayout === 'dual_map' || mapLayout === 'map3d_cam' || mapLayout === 'map3d_only') && (
                   <Map3D
                     mapData={telemetry.map}
                     position={telemetry.position}
                     theme={theme}
+                    robotMode={robotMode}
                     onShowToast={showToast}
+                    onRemove={handleRemove3DMap}
                   />
                 )}
 
@@ -772,7 +1070,15 @@ export default function App() {
                   onClearAlerts={handleClearAlerts}
                 />
                 <QuickControls
+                  robotMode={robotMode}
+                  onChangeMode={setRobotMode}
+                  manualSpeed={manualSpeed}
+                  onSetManualSpeed={setManualSpeed}
+                  onManualDrive={handleManualDrive}
                   onControlAction={handleControlAction}
+                  onEmergencyOutside={handleEmergencyOutside}
+                  onCancelEmergency={handleCancelEmergency}
+                  telemetry={telemetry}
                 />
               </div>
             </div>

@@ -15,7 +15,14 @@ import {
   X
 } from 'lucide-react';
 
-export default function Map3D({ mapData, position, theme = 'dark', onShowToast, onRemove }) {
+export default function Map3D({
+  mapData,
+  position,
+  theme = 'dark',
+  robotMode = 'automatic',
+  onShowToast,
+  onRemove
+}) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -748,8 +755,9 @@ export default function Map3D({ mapData, position, theme = 'dark', onShowToast, 
             </button>
           </div>
 
-          <span className="live-pill">
-            <span className="live-dot"></span> Live 3D
+          <span className={`live-pill ${robotMode === 'emergency_outside' ? 'pill-emergency' : robotMode === 'manual' ? 'pill-manual' : ''}`}>
+            <span className={`live-dot ${robotMode === 'emergency_outside' ? 'dot-emergency' : robotMode === 'manual' ? 'dot-manual' : ''}`}></span>
+            {robotMode === 'emergency_outside' ? '3D Evacuating' : robotMode === 'manual' ? '3D Manual' : 'Live 3D'}
           </span>
 
           {onRemove && (
@@ -769,11 +777,21 @@ export default function Map3D({ mapData, position, theme = 'dark', onShowToast, 
 
         {/* 3D HUD Telemetry Overlay */}
         <div className="map-hud-overlay map3d-hud">
-          <span className="coord-label">X:</span> <strong>{Number(position?.x ?? 52.4).toFixed(1)}m</strong>
-          <span className="coord-label">Y:</span> <strong>{Number(position?.y ?? 38.6).toFixed(1)}m</strong>
-          <span className="coord-label">Depth:</span> <strong>-480m</strong>
-          <span className="coord-label">Heading:</span> <strong>{Math.round(position?.heading ?? 84)}°</strong>
-          <span className="coord-label">Shaft:</span> <span>{position?.zone ?? "Sector 4 - Deep Shaft B"}</span>
+          <span className="coord-chip">
+            <span className="coord-label">X:</span> <strong>{Number(position?.x ?? 52.4).toFixed(1)}m</strong>
+          </span>
+          <span className="coord-chip">
+            <span className="coord-label">Y:</span> <strong>{Number(position?.y ?? 38.6).toFixed(1)}m</strong>
+          </span>
+          <span className="coord-chip">
+            <span className="coord-label">Depth:</span> <strong>-480m</strong>
+          </span>
+          <span className="coord-chip">
+            <span className="coord-label">H:</span> <strong>{Math.round(position?.heading ?? 84)}°</strong>
+          </span>
+          <span className={`coord-chip mode-indicator-chip ${robotMode}`}>
+            {robotMode === 'emergency_outside' ? '🚨 OUTSIDE EGRESS' : robotMode === 'manual' ? '🎮 MANUAL' : '🧊 3D TWIN'}
+          </span>
         </div>
 
         {/* 3D Layer & Feature Quick Toggles */}

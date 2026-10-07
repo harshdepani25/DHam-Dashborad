@@ -1,7 +1,13 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { MapPin, Target } from 'lucide-react';
 
-export default function Map2D({ mapData, position, theme = 'dark', onShowToast }) {
+export default function Map2D({
+  mapData,
+  position,
+  theme = 'dark',
+  robotMode = 'automatic',
+  onShowToast
+}) {
   const canvasRef = useRef(null);
   const wrapperRef = useRef(null);
   const [view, setView] = useState({ zoom: 1.0, panX: 0, panY: 0 });
@@ -9,6 +15,11 @@ export default function Map2D({ mapData, position, theme = 'dark', onShowToast }
   const dragStartRef = useRef({ x: 0, y: 0 });
 
   const isLight = theme === 'light';
+  const isEmergency = robotMode === 'emergency_outside';
+  const isManual = robotMode === 'manual';
+
+  // Surface Portal outside coordinate
+  const portalCoords = { x: 12, y: 16 };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -88,7 +99,7 @@ export default function Map2D({ mapData, position, theme = 'dark', onShowToast }
       });
     }
 
-    // 3. Path (Curved / Dashed line)
+    // 3. Normal Path (Curved / Dashed line)
     if (Array.isArray(mapData?.path) && mapData.path.length > 1) {
       ctx.save();
       ctx.shadowColor = isLight ? 'rgba(37, 99, 235, 0.3)' : 'rgba(59, 130, 246, 0.6)';
@@ -109,29 +120,97 @@ export default function Map2D({ mapData, position, theme = 'dark', onShowToast }
       ctx.restore();
     }
 
-    // 4. Robot Indicator
+    // 4. Outside Surface Portal Exit
+    const px = portalCoords.x * scaleX;
+    const py = portalCoords.y * scaleY;
+    ctx.save();
+    // Portal ring
+    ctx.beginPath();
+    ctx.arc(px, py, 14, 0, Math.PI * 2);
+    ctx.fillStyle = isLight ? 'rgba(16, 185, 129, 0.18)' : 'rgba(16, 185, 129, 0.25)';
+    ctx.fill();
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Portal icon core
+    ctx.beginPath();
+    ctx.arc(px, py, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#10b981';
+    ctx.shadowColor = '#10b981';
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Portal text label
+    ctx.font = 'bold 9px "Outfit", sans-serif';
+    ctx.fillStyle = isLight ? '#065f46' : '#6ee7b7';
+    ctx.textAlign = 'center';
+    ctx.fillText('OUTSIDE PORTAL', px, py - 18);
+    ctx.restore();
+
+    // 5. Emergency Evacuation Route Line
     const rx = (mapData?.robot?.x ?? 52) * scaleX;
     const ry = (mapData?.robot?.y ?? 38) * scaleY;
 
+    if (isEmergency) {
+      ctx.save();
+      ctx.shadowColor = 'rgba(239, 68, 68, 0.8)';
+      ctx.shadowBlur = 10;
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 4]);
+
+      ctx.beginPath();
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(px, py);
+      ctx.stroke();
+
+      // Draw directional arrow on route
+      const midX = (rx + px) / 2;
+      const midY = (ry + py) / 2;
+      ctx.fillStyle = '#f87171';
+      ctx.beginPath();
+      ctx.arc(midX, midY, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 6. Robot Indicator
+    ctx.save();
     // Pulse ripple ring
     const pulse = 14 + Math.sin(Date.now() / 250) * 4;
     ctx.beginPath();
     ctx.arc(rx, ry, pulse, 0, Math.PI * 2);
-    ctx.fillStyle = isLight ? 'rgba(2, 132, 199, 0.15)' : 'rgba(56, 189, 248, 0.2)';
+    if (isEmergency) {
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
+    } else if (isManual) {
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.25)';
+    } else {
+      ctx.fillStyle = isLight ? 'rgba(2, 132, 199, 0.15)' : 'rgba(56, 189, 248, 0.2)';
+    }
     ctx.fill();
 
     // Outer glow
     ctx.beginPath();
     ctx.arc(rx, ry, 11, 0, Math.PI * 2);
-    ctx.fillStyle = isLight ? 'rgba(37, 99, 235, 0.35)' : 'rgba(59, 130, 246, 0.45)';
-    ctx.shadowColor = isLight ? '#0284c7' : '#38bdf8';
-    ctx.shadowBlur = 10;
+    if (isEmergency) {
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.6)';
+      ctx.shadowColor = '#ef4444';
+    } else if (isManual) {
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.5)';
+      ctx.shadowColor = '#f59e0b';
+    } else {
+      ctx.fillStyle = isLight ? 'rgba(37, 99, 235, 0.35)' : 'rgba(59, 130, 246, 0.45)';
+      ctx.shadowColor = isLight ? '#0284c7' : '#38bdf8';
+    }
+    ctx.shadowBlur = 12;
     ctx.fill();
 
     // Core
     ctx.beginPath();
     ctx.arc(rx, ry, 7, 0, Math.PI * 2);
-    ctx.fillStyle = isLight ? '#0284c7' : '#38bdf8';
+    ctx.fillStyle = isEmergency ? '#ef4444' : isManual ? '#f59e0b' : isLight ? '#0284c7' : '#38bdf8';
     ctx.shadowBlur = 8;
     ctx.fill();
     ctx.shadowBlur = 0;
@@ -146,7 +225,8 @@ export default function Map2D({ mapData, position, theme = 'dark', onShowToast }
     ctx.stroke();
 
     ctx.restore();
-  }, [mapData, position, view, isLight]);
+    ctx.restore();
+  }, [mapData, position, view, isLight, isEmergency, isManual]);
 
   // Handle Dragging
   const handleMouseDown = (e) => {
@@ -171,26 +251,23 @@ export default function Map2D({ mapData, position, theme = 'dark', onShowToast }
     if (!wrapper) return;
 
     const handleWheel = (e) => {
-      // Strictly prevent browser page scrolling
       e.preventDefault();
       e.stopPropagation();
 
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      const factor = e.deltaY < 0 ? 1.15 : 0.87;
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
 
       setView((prev) => {
-        const nextZoom = Math.max(0.4, Math.min(4.5, Number((prev.zoom * factor).toFixed(2))));
-        if (nextZoom === prev.zoom) return prev;
-
-        const rect = canvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-        const cx = rect.width / 2;
-        const cy = rect.height / 2;
+        const nextZoom = Math.max(0.4, Math.min(4.5, Number((prev.zoom * zoomFactor).toFixed(3))));
         const scaleChange = nextZoom / prev.zoom;
-
         const nextPanX = prev.panX + (mouseX - cx - prev.panX) * (1 - scaleChange);
         const nextPanY = prev.panY + (mouseY - cy - prev.panY) * (1 - scaleChange);
 
@@ -224,8 +301,9 @@ export default function Map2D({ mapData, position, theme = 'dark', onShowToast }
           <span className="badge-2d">Tactical Grid</span>
         </div>
         <div className="card-header-right">
-          <span className="live-pill">
-            <span className="live-dot"></span> Live
+          <span className={`live-pill ${isEmergency ? 'pill-emergency' : isManual ? 'pill-manual' : ''}`}>
+            <span className={`live-dot ${isEmergency ? 'dot-emergency' : isManual ? 'dot-manual' : ''}`}></span>
+            {isEmergency ? 'Evacuating' : isManual ? 'Manual' : 'Live'}
           </span>
         </div>
       </div>
@@ -239,15 +317,23 @@ export default function Map2D({ mapData, position, theme = 'dark', onShowToast }
       >
         <canvas ref={canvasRef} id="mining-map-canvas" />
 
-        {/* HUD Coordinates Readout */}
+        {/* Compact HUD Readout (Positioned neatly without overlapping zoom controls) */}
         <div className="map-hud-overlay">
-          <span className="coord-label">X:</span> <strong>{Number(position?.x ?? 52.4).toFixed(1)}m</strong>
-          <span className="coord-label">Y:</span> <strong>{Number(position?.y ?? 38.6).toFixed(1)}m</strong>
-          <span className="coord-label">Heading:</span> <strong>{Math.round(position?.heading ?? 84)}°</strong>
-          <span className="coord-label">Zone:</span> <span>{position?.zone ?? "Sector 4"}</span>
+          <span className="coord-chip">
+            <span className="coord-label">X:</span> <strong>{Number(position?.x ?? 52.4).toFixed(1)}m</strong>
+          </span>
+          <span className="coord-chip">
+            <span className="coord-label">Y:</span> <strong>{Number(position?.y ?? 38.6).toFixed(1)}m</strong>
+          </span>
+          <span className="coord-chip">
+            <span className="coord-label">H:</span> <strong>{Math.round(position?.heading ?? 84)}°</strong>
+          </span>
+          <span className={`coord-chip mode-indicator-chip ${robotMode}`}>
+            {isEmergency ? '🚨 OUTSIDE EGRESS' : isManual ? '🎮 MANUAL' : '🤖 AUTO'}
+          </span>
         </div>
 
-        {/* Controls with Zoom Badge */}
+        {/* Zoom Controls with Zoom Badge */}
         <div className="map-controls">
           <span className="map-zoom-badge" title="Current Zoom Level">{Math.round(view.zoom * 100)}%</span>
           <button className="map-ctrl-btn" onClick={handleZoomIn} title="Zoom In">+</button>
@@ -257,10 +343,14 @@ export default function Map2D({ mapData, position, theme = 'dark', onShowToast }
           </button>
         </div>
 
-        {/* Legend */}
+        {/* Map Legend with Outside Portal indicator */}
         <div className="map-legend">
           <div className="legend-item">
-            <span className="legend-symbol robot-dot"></span>
+            <span className="legend-symbol portal-dot"></span>
+            <span className="legend-text">Outside Portal</span>
+          </div>
+          <div className="legend-item">
+            <span className={`legend-symbol robot-dot ${isEmergency ? 'emergency' : isManual ? 'manual' : ''}`}></span>
             <span className="legend-text">Robot</span>
           </div>
           <div className="legend-item">
