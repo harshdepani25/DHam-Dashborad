@@ -11,10 +11,11 @@ import {
   Maximize2,
   Scan,
   Zap,
-  Target
+  Target,
+  X
 } from 'lucide-react';
 
-export default function Map3D({ mapData, position, theme = 'dark', onShowToast }) {
+export default function Map3D({ mapData, position, theme = 'dark', onShowToast, onRemove }) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -750,6 +751,16 @@ export default function Map3D({ mapData, position, theme = 'dark', onShowToast }
           <span className="live-pill">
             <span className="live-dot"></span> Live 3D
           </span>
+
+          {onRemove && (
+            <button
+              className="card-remove-btn"
+              onClick={onRemove}
+              title="Remove 3D Map from screen (Can be restored anytime)"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
       </div>
 
