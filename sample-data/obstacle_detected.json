@@ -1,0 +1,66 @@
+{
+  "timestamp": "2026-10-04T11:10:00Z",
+  "robotId": "AM-08",
+  "name": "Mining Bot",
+  "version": "v1.0.0",
+  "status": "warning",
+  "systemHealth": 88,
+  "subsystems": {
+    "sensors": "Active",
+    "motors": "Active",
+    "communication": "Stable",
+    "navigation": "Rerouting"
+  },
+  "sensors": {
+    "mq4": { "value": 1.4, "unit": "ppm", "status": "normal", "threshold": 2.5 },
+    "mq7": { "value": 6, "unit": "ppm", "status": "normal", "threshold": 25 },
+    "mq135": { "value": 22, "unit": "ppm", "status": "normal", "threshold": 50 },
+    "mq136": { "value": 0.4, "unit": "ppm", "status": "normal", "threshold": 5.0 },
+    "dht22_temp": { "value": 28.1, "unit": "°C", "status": "normal", "threshold": 45 },
+    "dht22_humidity": { "value": 65.0, "unit": "% RH", "status": "normal", "threshold": 85 },
+    "o2": { "value": 20.8, "unit": "% Vol", "status": "normal", "minThreshold": 19.5 },
+    "pm25": { "value": 42, "unit": "µg/m³", "status": "normal", "threshold": 100 },
+    "battery": { "value": 72, "unit": "%", "status": "normal", "charging": false, "estRuntime": "4h 10m" },
+    "ch4": { "value": 1.4, "unit": "ppm", "status": "normal", "threshold": 2.5 },
+    "co": { "value": 6, "unit": "ppm", "status": "normal", "threshold": 25 },
+    "temperature": { "value": 28.1, "unit": "°C", "status": "normal", "threshold": 45 },
+    "humidity": { "value": 65.0, "unit": "%" },
+    "depth": { "value": -482, "unit": "m" }
+  },
+  "position": {
+    "x": 60.5,
+    "y": 27.2,
+    "heading": 45,
+    "zone": "Sector 4 - Pillar B Proximity",
+    "speed": 0.2
+  },
+  "map": {
+    "robot": { "x": 60.5, "y": 27.2 },
+    "path": [
+      { "x": 18, "y": 25 },
+      { "x": 35, "y": 29 },
+      { "x": 52, "y": 38 },
+      { "x": 60.5, "y": 27.2 }
+    ],
+    "obstacles": [
+      { "x": 30, "y": 16, "width": 6, "height": 18, "label": "Rockfall Alpha" },
+      { "x": 65, "y": 25, "width": 6, "height": 16, "label": "Pillar Bravo (CLOSE)" },
+      { "x": 67, "y": 56, "width": 6, "height": 18, "label": "Debris Delta" }
+    ]
+  },
+  "camera": {
+    "feedAvailable": true,
+    "currentCam": "front",
+    "nightVision": false,
+    "flashlight": true
+  },
+  "alerts": [
+    {
+      "id": "ALT-201",
+      "time": "11:09:50",
+      "level": "warning",
+      "message": "Obstacle proximity warning: LiDAR detected object at 1.4m",
+      "action": "Autonomous speed reduced, calculating alternative path"
+    }
+  ]
+}

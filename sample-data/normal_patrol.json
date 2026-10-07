@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-10-04T11:00:00Z",
+  "robotId": "AM-08",
+  "name": "Mining Bot",
+  "version": "v1.0.0",
+  "status": "online",
+  "systemHealth": 100,
+  "subsystems": {
+    "sensors": "Active",
+    "motors": "Active",
+    "communication": "Stable",
+    "navigation": "Active"
+  },
+  "sensors": {
+    "mq4": { "value": 1.2, "unit": "ppm", "status": "normal", "threshold": 2.5 },
+    "mq7": { "value": 4, "unit": "ppm", "status": "normal", "threshold": 25 },
+    "mq135": { "value": 18, "unit": "ppm", "status": "normal", "threshold": 50 },
+    "mq136": { "value": 0.3, "unit": "ppm", "status": "normal", "threshold": 5.0 },
+    "dht22_temp": { "value": 27.2, "unit": "°C", "status": "normal", "threshold": 45 },
+    "dht22_humidity": { "value": 68.0, "unit": "% RH", "status": "normal", "threshold": 85 },
+    "o2": { "value": 20.9, "unit": "% Vol", "status": "normal", "minThreshold": 19.5 },
+    "pm25": { "value": 34, "unit": "µg/m³", "status": "normal", "threshold": 100 },
+    "battery": { "value": 78, "unit": "%", "status": "normal", "charging": false, "estRuntime": "4h 30m" },
+    "ch4": { "value": 1.2, "unit": "ppm", "status": "normal", "threshold": 2.5 },
+    "co": { "value": 4, "unit": "ppm", "status": "normal", "threshold": 25 },
+    "temperature": { "value": 27.2, "unit": "°C", "status": "normal", "threshold": 45 },
+    "humidity": { "value": 68.0, "unit": "%" },
+    "depth": { "value": -480, "unit": "m" }
+  },
+  "position": {
+    "x": 52.4,
+    "y": 38.6,
+    "heading": 84,
+    "zone": "Sector 4 - Deep Shaft B",
+    "speed": 1.2
+  },
+  "map": {
+    "robot": { "x": 52, "y": 38 },
+    "path": [
+      { "x": 18, "y": 25 },
+      { "x": 24, "y": 33 },
+      { "x": 35, "y": 29 },
+      { "x": 42, "y": 22 },
+      { "x": 47, "y": 28 },
+      { "x": 52, "y": 38 },
+      { "x": 62, "y": 42 },
+      { "x": 75, "y": 38 }
+    ],
+    "obstacles": [
+      { "x": 30, "y": 16, "width": 6, "height": 18, "label": "Rockfall Alpha" },
+      { "x": 65, "y": 25, "width": 6, "height": 16, "label": "Pillar Bravo" },
+      { "x": 67, "y": 56, "width": 6, "height": 18, "label": "Debris Delta" }
+    ]
+  },
+  "camera": {
+    "feedAvailable": true,
+    "currentCam": "front",
+    "nightVision": false,
+    "flashlight": true
+  },
+  "alerts": []
+}
